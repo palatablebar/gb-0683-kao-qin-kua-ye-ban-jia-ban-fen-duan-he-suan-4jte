@@ -12,6 +12,9 @@ def run(content,parameters=None,stage=7):
     if len(content)>2_000_000:raise DomainError('SIZE','文件超过2MB',413)
     params=parameters or {}
     if not isinstance(params,dict):raise DomainError('PARAMETERS','参数必须是对象')
+    # 参数必须是 JSON 可序列化的，避免同一份入参在运行与留痕之间出现两种写法。
+    try:params=json.loads(json.dumps(params,ensure_ascii=False,default=str))
+    except (TypeError,ValueError):raise DomainError('PARAMETERS','参数无法序列化')
     start=time.monotonic();state=None
     for n,entry in enumerate(MODULES,1):
         if n>stage:break
@@ -25,3 +28,7 @@ def run(content,parameters=None,stage=7):
         from app.modules.m7_archive.export_out import checksum
         state['archive']['sha256']=checksum(state)
     return state
+
+def source_of(state):
+    if not state.get('source_b64'):raise DomainError('REFERENCE','批次缺少原始输入')
+    return base64.b64decode(state['source_b64'])

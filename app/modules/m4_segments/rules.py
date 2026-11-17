@@ -17,7 +17,7 @@ def split_shift(shift):
     points=sorted(boundaries);segments=[]
     for left,right in zip(points,points[1:]):
         if bs<=left<be:continue
-        segments.append({'id':shift['id'],'employee':shift['employee'],'shift_day':shift['day'],'calendar_day':left.date().isoformat(),'start':left.isoformat(),'end':right.isoformat(),'minutes':int((right-left).total_seconds()//60),'rate':str(a['hourly_rate']),'line':a['_line']})
+        segments.append({'id':shift['id'],'shift_id':shift['id'],'employee':shift['employee'],'shift_day':shift['day'],'calendar_day':left.date().isoformat(),'start':left.isoformat(),'end':right.isoformat(),'minutes':int((right-left).total_seconds()//60),'rate':str(a['hourly_rate']),'line':a['_line'],'corrected':bool(a.get('_corrected') or b.get('_corrected')),'basis':'calendar_day'})
     return segments
 
 def apply(state):
@@ -26,4 +26,4 @@ def apply(state):
         try:out.extend(split_shift(shift))
         except DomainError as e:
             for r in shift['sources']:bad.add(r['_line']);state['quarantine'].append({'line':r['_line'],'id':r['id'],'code':e.code,'raw':r['_raw']})
-    state['rows']=[r for r in state['rows'] if r['_line'] not in bad];state['segments']=out;return state
+    state['rows']=[r for r in state['rows'] if r['_line'] not in bad];state['segments']=out;state['segment_count']=len(out);return state

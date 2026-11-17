@@ -20,9 +20,11 @@ docker compose up --build -d
 - 薪资对账：`/m6_reconcile`、`/api/m6_reconcile`
 - 周期归档：`/m7_archive`、`/api/m7_archive`
 
-## 核心规则
+## 核心规则与裁决
 
-跨夜按班次归属日配对，休息区间先扣除，再按法定日期和工时阈值切分倍率。完整数值、边界和异常定义见 `docs/DATA-DICTIONARY.md`。
+跨夜按班次归属日配对，休息区间先扣除；工资倍率**按实际日历日分段**，片段仍保留 `shift_day`/`shift_id` 对应原班次。整班套用归属日费率仅保留为对比口径。同员工同一实际日历日的工作共用 8 小时正常工时额度。完整数值、边界和异常定义见 `docs/DATA-DICTIONARY.md`。
+
+补卡、休息、假期或口径变更走 `POST /api/runs/<id>/recalculate`（口径快捷入口 `POST /api/runs/<id>/basis`）：候选结果通过自检才追加修订并生效，失败保留旧版；原始补卡记录与复核决定只追加不覆盖，可按修订号回看导出证据。
 
 ## 验证
 
@@ -31,7 +33,7 @@ docker compose exec -T app pytest -q
 docker compose config --quiet
 ```
 
-原始样例在 `sample_data/`。测试在 `tests/`。封存文件是单份CSV，含运行清单、计算证据、隔离原因与对账。复核需提交当前版本，陈旧复核返回409。
+原始样例在 `sample_data/`。测试在 `tests/`。封存文件是单份CSV，含运行清单、计价口径、计算证据、补卡证据、隔离原因与对账。复核需提交当前版本，陈旧复核返回409。
 
 ## 数据与限制
 

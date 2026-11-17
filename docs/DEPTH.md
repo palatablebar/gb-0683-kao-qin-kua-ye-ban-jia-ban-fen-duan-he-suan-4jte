@@ -1,6 +1,6 @@
 # 深度登记 考勤跨夜班与加班分段核算
 
-规模：中型。核心规则：跨夜按班次归属日配对，休息区间先扣除，再按法定日期和工时阈值切分倍率。
+规模：中型。核心规则：跨夜按班次归属日配对，休息区间先扣除，再按**实际日历日**判断法定日期并切分倍率；整班归属日口径仅保留作对比。补卡与变更显式提交、留痕、可重算可回退。
 
 ## 功能模块
 
@@ -8,11 +8,11 @@
 |---|---|---|---|---|
 | M1 打卡采信 | 查看并复算打卡采信 | `/api/m1_ingest` | `app/modules/m1_ingest/reader.py` | `tests/test_ingest.py` |
 | M2 班次日历 | 查看并复算班次日历 | `/api/m2_mapping` | `app/modules/m2_mapping/rules.py` | `tests/test_mapping.py` |
-| M3 跨夜配对 | 查看并复算跨夜配对 | `/api/m3_versions` | `app/modules/m3_versions/rules.py` | `tests/test_versions.py` |
+| M3 跨夜配对 | 查看并复算跨夜配对；提交补卡/休息变更 | `/api/m3_versions`、`/api/runs/<id>/recalculate` | `app/modules/m3_versions/rules.py`、`app/modules/m3_versions/corrections.py` | `tests/test_versions.py`、`tests/test_corrections.py` |
 | M4 缺卡复核 | 查看并复算缺卡复核 | `/api/m4_segments` | `app/modules/m4_segments/rules.py` | `tests/test_segments.py` |
-| M5 工时切段 | 查看并复算工时切段 | `/api/m5_calculate` | `app/modules/m5_calculate/rules.py` | `tests/test_calculate.py` |
+| M5 工时切段 | 查看并复算工时切段；切换计价口径 | `/api/m5_calculate`、`/api/runs/<id>/basis` | `app/modules/m5_calculate/rules.py` | `tests/test_calculate.py`、`tests/test_basis.py` |
 | M6 薪资对账 | 查看并复算薪资对账 | `/api/m6_reconcile` | `app/modules/m6_reconcile/compare.py` | `tests/test_reconcile.py` |
-| M7 周期归档 | 查看并复算周期归档 | `/api/m7_archive` | `app/modules/m7_archive/export_out.py` | `tests/test_archive.py` |
+| M7 周期归档 | 查看并复算周期归档；按修订导出 | `/api/m7_archive` | `app/modules/m7_archive/export_out.py`、`app/store.py` | `tests/test_archive.py`、`tests/test_corrections.py` |
 
 ## 陷阱登记
 
@@ -31,10 +31,16 @@
 | TRAP-26 | 旧版本复核 | 覆盖新结论 | 事务条件更新 | `app/store.py` | `tests/test_archive.py::test_stale_review` |
 | TRAP-23 | 休息与跨夜端点 | 重复或漏计 | 半开区间切片 | `app/modules/m4_segments/rules.py` | `tests/test_segments.py::test_break_removed` |
 | TRAP-19 | 假日与周末重叠 | 费率相加 | 假日优先 | `app/modules/m5_calculate/rules.py` | `tests/test_calculate.py::test_holiday_overrides_rest` |
+| TRAP-27 | 夜班跨日历日 | 整班套归属日费率 | 按实际日历日分段，保留班次对应 | `app/modules/m4_segments/rules.py`、`app/modules/m5_calculate/rules.py` | `tests/test_basis.py::test_calendar_day_splits_night_shift` |
+| TRAP-28 | 同员工同日两段 | 各自给满8小时 | 片段共享正常额度 | `app/modules/m5_calculate/rules.py` | `tests/test_basis.py::test_normal_quota_shared_across_two_segments_same_day` |
+| TRAP-29 | 重跑重算 | 重复累计正常工时 | 幂等批次+追加修订 | `app/store.py`、`app/main.py` | `tests/test_corrections.py::test_repricing_does_not_double_normal_minutes` |
+| TRAP-30 | 补卡覆盖原件 | 直接改写采信行 | 班次副本+原件留痕 | `app/modules/m3_versions/corrections.py` | `tests/test_corrections.py::test_correction_does_not_touch_source_rows` |
+| TRAP-31 | 变更后复核 | 旧结论继续生效 | 版本递增回待复核，日志追加 | `app/store.py` | `tests/test_corrections.py::test_review_log_is_append_only` |
+| TRAP-32 | 证据切换失败 | 页面/导出半途替换 | 候选成功后生效，失败恢复旧版 | `app/main.py`、`app/static/sheet.js` | `tests/test_corrections.py::test_switch_basis_keeps_revisions_and_rolls_back_on_failure` |
 
 ## 对账规则
 
-输入行数=采纳+隔离+空行+重复表头+完全重复；业务总数与计算证据独立求和。隔离行保留来源行、ID、原因码与原值。
+输入行数=采纳+隔离+空行+重复表头+完全重复；业务总数与计算证据独立求和。隔离行保留来源行、ID、原因码与原值。补卡不进入行数对账，但采纳与拒绝都随批次留痕。
 
 ## 已知不覆盖
 
